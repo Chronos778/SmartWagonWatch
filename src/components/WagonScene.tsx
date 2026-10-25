@@ -214,8 +214,7 @@ export function WagonScene({ attitude, loadFraction, overloaded, vibration }: Pr
     resize();
 
     // ----- animation -------------------------------------------------------
-    const startedAt = performance.now();
-    let previousFrame = startedAt;
+    let previousFrame = performance.now();
     let smoothRoll = 0;
     let smoothPitch = 0;
     let homeBlend: number | null = null;
@@ -232,29 +231,29 @@ export function WagonScene({ attitude, loadFraction, overloaded, vibration }: Pr
     const animate = () => {
       const frameNow = performance.now();
       const delta = Math.min(0.05, (frameNow - previousFrame) / 1000);
-      const elapsed = (frameNow - startedAt) / 1000;
       previousFrame = frameNow;
 
       const att = attitudeRef.current;
-      const targetRoll = THREE.MathUtils.clamp((att?.roll ?? 0) * DEG, -45 * DEG, 45 * DEG);
-      const targetPitch = THREE.MathUtils.clamp((att?.pitch ?? 0) * DEG, -45 * DEG, 45 * DEG);
+      // Allow full real-life physical tilt angles up to 85°
+      const targetRoll = THREE.MathUtils.clamp((att?.roll ?? 0) * DEG, -85 * DEG, 85 * DEG);
+      const targetPitch = THREE.MathUtils.clamp((att?.pitch ?? 0) * DEG, -85 * DEG, 85 * DEG);
 
-      // Smoothly track real-life wagon movements without lag or artificial wobble
-      smoothRoll += (targetRoll - smoothRoll) * Math.min(1, delta * 10);
-      smoothPitch += (targetPitch - smoothPitch) * Math.min(1, delta * 10);
+      // Frame-rate independent exponential interpolation for butter-smooth 60/120 FPS tracking
+      const decay = 1 - Math.exp(-12 * delta);
+      smoothRoll += (targetRoll - smoothRoll) * decay;
+      smoothPitch += (targetPitch - smoothPitch) * decay;
 
       // Directly mimic real-world wagon attitude — zero synthetic shake or wobbling
-      tilt.rotation.z = smoothRoll;
-      tilt.rotation.x = smoothPitch;
+      tilt.rotation.z = -smoothRoll;
+      tilt.rotation.x = -smoothPitch;
       tilt.position.y = 0;
 
       const isOver = overloadRef.current;
       const warmTarget = new THREE.Color(isOver ? 0xff3b53 : 0xf6a723);
       rimWarm.color.lerp(warmTarget, Math.min(1, delta * 4));
-      rimWarm.intensity = (26 + Math.sin(elapsed * 1.7) * 4) * (isOver ? 1.5 : 1);
-      haloMaterial.opacity =
-        0.06 + Math.min(0.16, loadRef.current * 0.14) + (isOver ? 0.08 : 0);
-      halo.scale.setScalar(1 + Math.sin(elapsed * 0.8) * 0.015);
+      rimWarm.intensity = 28 * (isOver ? 1.5 : 1);
+      haloMaterial.opacity = 0.08 + Math.min(0.16, loadRef.current * 0.14) + (isOver ? 0.08 : 0);
+      halo.scale.setScalar(1);
 
       if (homeBlend !== null) {
         homeBlend = Math.min(1, homeBlend + delta * 3.2);

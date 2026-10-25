@@ -163,6 +163,7 @@ function loadAttitudeSettings(): AttitudeSettings {
           parsed.mount === 'inverted' || parsed.mount === 'upright' || parsed.mount === 'auto'
             ? parsed.mount
             : 'auto',
+        longitudinalAxis: parsed.longitudinalAxis === 'y' ? 'y' : 'x',
         invertRoll: Boolean(parsed.invertRoll ?? parsed.invertY),
         invertPitch: Boolean(parsed.invertPitch ?? parsed.invertX),
         tareRoll: typeof parsed.tareRoll === 'number' ? parsed.tareRoll : 0,
@@ -322,10 +323,31 @@ export function useTelemetry(limits: Limits) {
           accel.z = frame.az;
           accel.ready = true;
         } else {
-          const alpha = 0.35;
-          accel.x += (frame.ax - accel.x) * alpha;
-          accel.y += (frame.ay - accel.y) * alpha;
-          accel.z += (frame.az - accel.z) * alpha;
+          // 3D vector distance between incoming sensor reading and current filtered attitude vector
+          const dx = frame.ax - accel.x;
+          const dy = frame.ay - accel.y;
+          const dz = frame.az - accel.z;
+          const dist = Math.hypot(dx, dy, dz);
+
+          // Adaptive dual-regime noise filter:
+          // 1. Resting state: Raw MPU6050 electrical ADC ripple is typically 0.015 - 0.035 g.
+          //    Under 0.025 g, the wagon is completely stationary -> deadband locks attitude rock-solid.
+          // 2. Slow subtle tilt: 0.025 - 0.06 g -> gentle smooth convergence (no jump).
+          // 3. Fast physical hand tilt: > 0.06 g -> dynamic scaling up to alpha = 0.82 for instant 1:1 response.
+          let alpha = 0;
+          if (dist > 0.06) {
+            // Fast tracking for real-life hand movement
+            alpha = Math.min(0.82, 0.45 + (dist - 0.06) * 1.6);
+          } else if (dist > 0.025) {
+            // Gentle smooth tracking without jerking
+            alpha = 0.12;
+          }
+
+          if (alpha > 0) {
+            accel.x += dx * alpha;
+            accel.y += dy * alpha;
+            accel.z += dz * alpha;
+          }
         }
       }
 

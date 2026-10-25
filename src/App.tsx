@@ -98,7 +98,15 @@ export function App() {
         </div>
 
         <div className="board__col board__col--center">
-          <ScenePanel derived={snapshot.derived} live={live} onDemo={actions.toggleDemo} />
+          <ScenePanel
+            derived={snapshot.derived}
+            live={live}
+            onDemo={actions.toggleDemo}
+            attitudeSettings={snapshot.attitudeSettings}
+            onTareLevel={actions.tareLevel}
+            onResetTareLevel={actions.resetTareLevel}
+            onUpdateSettings={actions.updateAttitudeSettings}
+          />
           <Metrics derived={snapshot.derived} stats={snapshot.stats} limits={limits} live={live} />
         </div>
 

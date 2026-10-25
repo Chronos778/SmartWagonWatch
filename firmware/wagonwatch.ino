@@ -53,8 +53,8 @@
  */
 #define MPU_INVERT_Z false
 
-/** Telemetry frame interval: 200 ms = 5 Hz. */
-#define SEND_INTERVAL_MS 200
+/** Telemetry frame interval: 80 ms = 12.5 Hz for fluid, low-latency tracking. */
+#define SEND_INTERVAL_MS 80
 /** DHT11 must not be polled faster than ~1 Hz. */
 #define DHT_INTERVAL_MS 2500
 #define TARE_SAMPLES 20
@@ -156,12 +156,9 @@ void sendAck(const String &message) {
 // ---------------------------------------------------------------------------
 
 void readLoadCell() {
-  // One reading serves both raw and grams, as in the original sketch.
-  if (!hxOk || !scale.wait_ready_timeout(500)) {
-    gramsNow = NAN;
-    return;
-  }
-  rawNow = scale.read_average(5);
+  if (!hxOk || !scale.is_ready()) return;
+  // Non-blocking read so telemetry loop runs smoothly at full rate without stalling MPU data
+  rawNow = scale.get_value(1);
   long change = rawNow - scale.get_offset();
   gramsNow = change / scale.get_scale();
   if (fabs(gramsNow) < 1.0) gramsNow = 0;   // deadband: hide +/-0.3 g noise
@@ -176,9 +173,18 @@ void readMpu() {
   int16_t x = read16();
   int16_t y = read16();
   int16_t z = read16();
-  ax = x / 16384.0;
-  ay = y / 16384.0;
-  az = (MPU_INVERT_Z ? -1.0f : 1.0f) * (z / 16384.0f);
+  float rawAx = x / 16384.0f;
+  float rawAy = y / 16384.0f;
+  float rawAz = (MPU_INVERT_Z ? -1.0f : 1.0f) * (z / 16384.0f);
+
+  if (isnan(ax)) {
+    ax = rawAx; ay = rawAy; az = rawAz;
+  } else {
+    // Smooth moving average to eliminate raw ADC ripple and table jitter
+    ax = ax * 0.70f + rawAx * 0.30f;
+    ay = ay * 0.70f + rawAy * 0.30f;
+    az = az * 0.70f + rawAz * 0.30f;
+  }
 }
 
 void readClimate() {
@@ -287,10 +293,17 @@ void setup() {
   }
   if (mpuAddr) {
     Wire.beginTransmission(mpuAddr);
-    Wire.write(0x6B); Wire.write(0x00);
+    Wire.write(0x6B); Wire.write(0x00); // Wake up MPU6050
     Wire.endTransmission();
+
+    // Enable hardware Digital Low Pass Filter (DLPF_CFG = 4: 21 Hz bandwidth)
+    // Hardware-filters high frequency motor hum and electrical sensor noise
+    Wire.beginTransmission(mpuAddr);
+    Wire.write(0x1A); Wire.write(0x04);
+    Wire.endTransmission();
+
     mpuOk = true;
-    Serial.printf("MPU6050: OK at 0x%02X\n", mpuAddr);
+    Serial.printf("MPU6050: OK at 0x%02X (DLPF active)\n", mpuAddr);
   } else {
     Serial.println(F("MPU6050: NOT FOUND (check SDA=21, SCL=22, first DA pin)"));
   }

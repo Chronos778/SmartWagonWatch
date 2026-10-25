@@ -126,10 +126,12 @@ export function MotionCard({
           <div>
             <dt>Roll</dt>
             <dd>{roll === null ? '—' : `${roll > 0 ? '+' : ''}${fmt(roll, 1)}°`}</dd>
+            {attitude?.rollDirection && <span className="motion__dir">{attitude.rollDirection}</span>}
           </div>
           <div>
             <dt>Pitch</dt>
             <dd>{pitch === null ? '—' : `${pitch > 0 ? '+' : ''}${fmt(pitch, 1)}°`}</dd>
+            {attitude?.pitchDirection && <span className="motion__dir">{attitude.pitchDirection}</span>}
           </div>
           <div>
             <dt>Tilt</dt>
@@ -169,6 +171,18 @@ export function MotionCard({
           title="Toggle mounting orientation: Auto (detects Z-down), Inverted (underside), Upright (top)"
         >
           Mount: {attitudeSettings.mount}
+        </button>
+        <button
+          type="button"
+          className={`btn btn--ghost btn--tiny ${attitudeSettings.longitudinalAxis !== 'x' ? 'is-active' : ''}`}
+          onClick={() =>
+            onUpdateSettings({
+              longitudinalAxis: attitudeSettings.longitudinalAxis === 'x' ? 'y' : 'x',
+            })
+          }
+          title="Toggle which sensor axis is along the wagon base: X (beside load cell) or Y"
+        >
+          Axis: {attitudeSettings.longitudinalAxis.toUpperCase()}-Base
         </button>
         <button
           type="button"

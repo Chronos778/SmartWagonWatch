@@ -6,12 +6,16 @@
  */
 
 export interface Attitude {
-  /** Side-to-side lean, degrees (+ = sensor side down). Measured across wagon (Y axis). */
+  /** Side-to-side lean, degrees. Measured across wagon (Y axis). */
   roll: number;
-  /** Fore/aft tilt, degrees (+ = front down). Measured along wagon base (X axis). */
+  /** Fore/aft tilt, degrees. Measured along wagon base (X axis). */
   pitch: number;
   /** Total angle away from level, degrees. */
   tilt: number;
+  /** Human-readable pitch direction: "Front Down", "Front Up", or "Level". */
+  pitchDirection: string;
+  /** Human-readable roll direction: "Right Down", "Left Down", or "Level". */
+  rollDirection: string;
   /** Whether inverted Z (underside mount) is active. */
   inverted?: boolean;
   /** Whether level calibration (tare) is active. */
@@ -30,10 +34,16 @@ export interface AttitudeSettings {
    * - 'upright': Standard top mount (Z up)
    */
   mount: 'auto' | 'upright' | 'inverted';
+  /**
+   * Which sensor axis runs along the length / base of the wagon:
+   * - 'x': Sensor X is along the wagon base beside load cell (default)
+   * - 'y': Sensor Y is along the wagon base
+   */
+  longitudinalAxis: 'x' | 'y';
   /** Invert roll axis (side-to-side lean across wagon). */
-  invertRoll?: boolean;
+  invertRoll: boolean;
   /** Invert pitch axis (fore-aft tilt along base). */
-  invertPitch?: boolean;
+  invertPitch: boolean;
   /** Legacy alias for invertPitch. */
   invertX?: boolean;
   /** Legacy alias for invertRoll. */
@@ -46,6 +56,7 @@ export interface AttitudeSettings {
 
 export const DEFAULT_ATTITUDE_SETTINGS: AttitudeSettings = {
   mount: 'auto',
+  longitudinalAxis: 'x',
   invertRoll: false,
   invertPitch: false,
   tareRoll: 0,
@@ -75,15 +86,19 @@ export function attitude(
   const isInverted = mount === 'inverted' || (mount === 'auto' && az < -0.3);
 
   const azEff = isInverted ? -az : az;
-  // X is along the wagon base (beside load cell); Y is across the wagon.
+  // Longitudinal axis is along wagon base (pitch); lateral axis is across wagon (roll).
+  const isXLongitudinal = (settings?.longitudinalAxis ?? 'x') === 'x';
+  const aPitchRaw = isXLongitudinal ? ax : ay;
+  const aRollRaw = isXLongitudinal ? ay : ax;
+
   const invP = Boolean(settings?.invertPitch || settings?.invertX);
   const invR = Boolean(settings?.invertRoll || settings?.invertY);
-  const axEff = invP ? -ax : ax;
-  const ayEff = invR ? -ay : ay;
+  const aPitchEff = invP ? -aPitchRaw : aPitchRaw;
+  const aRollEff = invR ? -aRollRaw : aRollRaw;
 
-  // X along wagon base measures fore/aft pitch; Y across wagon measures side-to-side roll.
-  const rawPitch = Math.atan2(axEff, azEff) * RAD;
-  const rawRoll = Math.atan2(ayEff, azEff) * RAD;
+  // Robust normalized pitch & roll from 3D gravity projection without cross-axis distortion
+  const rawPitch = Math.atan2(aPitchEff, Math.hypot(aRollEff, azEff)) * RAD;
+  const rawRoll = Math.atan2(aRollEff, Math.hypot(aPitchEff, azEff)) * RAD;
 
   const tareRoll = settings?.tareRoll ?? 0;
   const tarePitch = settings?.tarePitch ?? 0;
@@ -96,7 +111,20 @@ export function attitude(
   const rawTilt = Math.acos(Math.min(1, Math.max(-1, azEff / magnitude))) * RAD;
   const tilt = isTared ? Math.hypot(roll, pitch) : rawTilt;
 
-  return { roll, pitch, tilt, inverted: isInverted, isTared, rawRoll, rawPitch };
+  const pitchDirection = Math.abs(pitch) < 0.4 ? 'Level' : pitch > 0 ? 'Front Down' : 'Front Up';
+  const rollDirection = Math.abs(roll) < 0.4 ? 'Level' : roll > 0 ? 'Right Down' : 'Left Down';
+
+  return {
+    roll,
+    pitch,
+    tilt,
+    pitchDirection,
+    rollDirection,
+    inverted: isInverted,
+    isTared,
+    rawRoll,
+    rawPitch,
+  };
 }
 
 /** Split the accelerometer into gravity + vibration, and track a rolling RMS. */

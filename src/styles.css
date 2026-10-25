@@ -937,6 +937,34 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
+.scene__readout-item small {
+  font-size: 8px;
+  color: var(--teal);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.scene__controls {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  background: rgba(6, 10, 15, 0.75);
+  padding: 5px 8px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+
+.scene__controls .btn--tiny {
+  padding: 3px 7px;
+  font-size: 9px;
+}
+
 .scene__load {
   position: absolute;
   top: 12px;
@@ -1333,6 +1361,14 @@ code {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.motion__dir {
+  display: block;
+  font-size: 8px;
+  color: var(--teal);
+  letter-spacing: 0.04em;
+  margin-top: 1px;
 }
 
 .motion__actions {
