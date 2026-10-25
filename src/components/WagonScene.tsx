@@ -242,16 +242,17 @@ export function WagonScene({ attitude, loadFraction, overloaded, vibration }: Pr
       smoothRoll += (targetRoll - smoothRoll) * Math.min(1, delta * 4.5);
       smoothPitch += (targetPitch - smoothPitch) * Math.min(1, delta * 4.5);
 
-      // Vibration shakes the body; it fades as the wagon settles.
-      const amplitude = Math.min(0.045, vibrationRef.current * 0.55 + 0.0005);
-      const jitter = Math.sin(elapsed * 46) * amplitude;
-      const jitter2 = Math.cos(elapsed * 61) * amplitude * 0.7;
+      // Only shake on real vibration above the stationary sensor noise floor (> 0.02 g).
+      const vibActive = Math.max(0, vibrationRef.current - 0.02);
+      const amplitude = Math.min(0.03, vibActive * 0.4);
+      const jitter = amplitude > 0 ? Math.sin(elapsed * 46) * amplitude : 0;
+      const jitter2 = amplitude > 0 ? Math.cos(elapsed * 61) * amplitude * 0.7 : 0;
 
       tilt.rotation.z = smoothRoll + jitter;
       tilt.rotation.x = smoothPitch + jitter2;
 
-      // Soft breathing float so the wagon never looks pasted on.
-      tilt.position.y = Math.sin(elapsed * 0.9) * 0.012;
+      // Keep the wagon wheels planted solidly on the ground
+      tilt.position.y = 0;
 
       const isOver = overloadRef.current;
       const warmTarget = new THREE.Color(isOver ? 0xff3b53 : 0xf6a723);
