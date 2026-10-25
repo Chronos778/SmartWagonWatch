@@ -1,16 +1,26 @@
 import { fmt } from '../lib/format';
 import type { Derived, Stats } from '../lib/telemetry';
+import type { AttitudeSettings } from '../lib/derive';
 import type { Telemetry } from '../lib/protocol';
 import { AttitudeDial } from './AttitudeDial';
 
-interface Props {
+interface ClimateProps {
+  derived: Derived | null;
+  frame: Telemetry | null;
+}
+
+interface MotionProps {
   derived: Derived | null;
   frame: Telemetry | null;
   stats: Stats;
   live: boolean;
+  attitudeSettings: AttitudeSettings;
+  onTareLevel: () => void;
+  onResetTareLevel: () => void;
+  onUpdateSettings: (patch: Partial<AttitudeSettings>) => void;
 }
 
-export function ClimateCard({ derived, frame }: { derived: Derived | null; frame: Telemetry | null }) {
+export function ClimateCard({ derived, frame }: ClimateProps) {
   const climate = derived?.climate;
   const temp = frame?.tc ?? null;
   const humidity = frame?.rh ?? null;
@@ -61,13 +71,32 @@ export function ClimateCard({ derived, frame }: { derived: Derived | null; frame
   );
 }
 
-export function MotionCard({ derived, frame, stats, live }: Props) {
+export function MotionCard({
+  derived,
+  frame,
+  stats,
+  live,
+  attitudeSettings,
+  onTareLevel,
+  onResetTareLevel,
+  onUpdateSettings,
+}: MotionProps) {
   const attitude = derived?.attitude ?? null;
   const roll = attitude?.roll ?? null;
   const pitch = attitude?.pitch ?? null;
   const tilt = attitude?.tilt ?? null;
   const vibration = derived?.vibration ?? 0;
   const shock = stats.peakShock;
+
+  const cycleMount = () => {
+    const nextMount =
+      attitudeSettings.mount === 'auto'
+        ? 'inverted'
+        : attitudeSettings.mount === 'inverted'
+          ? 'upright'
+          : 'auto';
+    onUpdateSettings({ mount: nextMount });
+  };
 
   return (
     <section className="panel panel--sensor">
@@ -76,7 +105,19 @@ export function MotionCard({ derived, frame, stats, live }: Props) {
           <p className="eyebrow">Motion</p>
           <h2>Wagon attitude</h2>
         </div>
-        <span className="tag tag--teal">MPU6050</span>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          {attitude?.inverted && (
+            <span className="tag tag--sky" title="Underside mount detected or active (Z-axis pointing down)">
+              UNDERSIDE MOUNT
+            </span>
+          )}
+          {attitude?.isTared && (
+            <span className="tag tag--teal" title="Attitude level calibrated">
+              TARED
+            </span>
+          )}
+          <span className="tag tag--teal">MPU6050</span>
+        </div>
       </header>
 
       <div className="motion">
@@ -101,6 +142,36 @@ export function MotionCard({ derived, frame, stats, live }: Props) {
         </dl>
       </div>
 
+      <div className="motion__actions">
+        <button
+          type="button"
+          className="btn btn--ghost btn--tiny"
+          onClick={onTareLevel}
+          title="Zero out current angles and set the wagon as 0° level on the ground"
+          disabled={frame?.az == null}
+        >
+          Tare level (Zero)
+        </button>
+        {attitude?.isTared && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--tiny"
+            onClick={onResetTareLevel}
+            title="Clear level tare offset"
+          >
+            Reset
+          </button>
+        )}
+        <button
+          type="button"
+          className={`btn btn--ghost btn--tiny ${attitudeSettings.mount !== 'auto' ? 'is-active' : ''}`}
+          onClick={cycleMount}
+          title="Toggle mounting orientation: Auto (detects Z-down), Inverted (underside), Upright (top)"
+        >
+          Mount: {attitudeSettings.mount}
+        </button>
+      </div>
+
       <div className="motion__foot">
         <div>
           <span>Peak shock</span>
@@ -119,6 +190,7 @@ export function MotionCard({ derived, frame, stats, live }: Props) {
       {frame?.ax != null && frame?.az != null && (
         <p className="axis-note">
           accel x {fmt(frame.ax, 2)} · y {fmt(frame.ay, 2)} · z {fmt(frame.az, 2)} g
+          {attitude?.inverted ? ' · (z inverted)' : ''}
         </p>
       )}
     </section>

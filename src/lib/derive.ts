@@ -12,7 +12,41 @@ export interface Attitude {
   pitch: number;
   /** Total angle away from level, degrees. */
   tilt: number;
+  /** Whether inverted Z (underside mount) is active. */
+  inverted?: boolean;
+  /** Whether level calibration (tare) is active. */
+  isTared?: boolean;
+  /** Raw roll before tare offset, degrees. */
+  rawRoll?: number;
+  /** Raw pitch before tare offset, degrees. */
+  rawPitch?: number;
 }
+
+export interface AttitudeSettings {
+  /**
+   * Mounting orientation:
+   * - 'auto': Automatically detect underside mounting when az is negative
+   * - 'inverted': Always treat as underside mount (invert Z)
+   * - 'upright': Standard top mount (Z up)
+   */
+  mount: 'auto' | 'upright' | 'inverted';
+  /** Invert roll axis (+X side down becomes -X). */
+  invertX: boolean;
+  /** Invert pitch axis (+Y side down becomes -Y). */
+  invertY: boolean;
+  /** Roll offset in degrees when wagon is on level ground. */
+  tareRoll: number;
+  /** Pitch offset in degrees when wagon is on level ground. */
+  tarePitch: number;
+}
+
+export const DEFAULT_ATTITUDE_SETTINGS: AttitudeSettings = {
+  mount: 'auto',
+  invertX: false,
+  invertY: false,
+  tareRoll: 0,
+  tarePitch: 0,
+};
 
 export interface Vec3 {
   x: number;
@@ -22,14 +56,39 @@ export interface Vec3 {
 
 const RAD = 180 / Math.PI;
 
-export function attitude(ax: number | null, ay: number | null, az: number | null): Attitude | null {
+export function attitude(
+  ax: number | null,
+  ay: number | null,
+  az: number | null,
+  settings?: Partial<AttitudeSettings>,
+): Attitude | null {
   if (ax === null || ay === null || az === null) return null;
   const magnitude = Math.hypot(ax, ay, az);
   if (!Number.isFinite(magnitude) || magnitude < 0.2) return null;
-  const roll = Math.atan2(ax, az) * RAD;
-  const pitch = Math.atan2(ay, az) * RAD;
-  const tilt = Math.acos(Math.min(1, Math.max(-1, az / magnitude))) * RAD;
-  return { roll, pitch, tilt };
+
+  const mount = settings?.mount ?? 'auto';
+  // When mounted on the wagon underside or upside-down, gravity support points in -Z direction (az ~ -1 g).
+  const isInverted = mount === 'inverted' || (mount === 'auto' && az < -0.3);
+
+  let azEff = isInverted ? -az : az;
+  let axEff = settings?.invertX ? -ax : ax;
+  let ayEff = settings?.invertY ? -ay : ay;
+
+  const rawRoll = Math.atan2(axEff, azEff) * RAD;
+  const rawPitch = Math.atan2(ayEff, azEff) * RAD;
+
+  const tareRoll = settings?.tareRoll ?? 0;
+  const tarePitch = settings?.tarePitch ?? 0;
+  const isTared = Math.abs(tareRoll) > 0.001 || Math.abs(tarePitch) > 0.001;
+
+  const roll = rawRoll - tareRoll;
+  const pitch = rawPitch - tarePitch;
+
+  // When tared to ground level, tilt measures deviation from that level reference.
+  const rawTilt = Math.acos(Math.min(1, Math.max(-1, azEff / magnitude))) * RAD;
+  const tilt = isTared ? Math.hypot(roll, pitch) : rawTilt;
+
+  return { roll, pitch, tilt, inverted: isInverted, isTared, rawRoll, rawPitch };
 }
 
 /** Split the accelerometer into gravity + vibration, and track a rolling RMS. */

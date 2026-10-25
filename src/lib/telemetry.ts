@@ -8,6 +8,8 @@ import {
   loadRate,
   stabilityIndex,
   type Attitude,
+  type AttitudeSettings,
+  DEFAULT_ATTITUDE_SETTINGS,
   type ClimateReading,
   type Level,
 } from './derive';
@@ -95,6 +97,7 @@ export interface Snapshot {
   alerts: AlertItem[];
   history: Sample[];
   console: ConsoleLine[];
+  attitudeSettings: AttitudeSettings;
 }
 
 const EMPTY_STATS: Stats = {
@@ -148,7 +151,36 @@ function verdictFor(grams: number | null, limits: Limits, live: boolean): Verdic
   };
 }
 
+const ATTITUDE_KEY = 'wagonwatch.attitude.v1';
+
+function loadAttitudeSettings(): AttitudeSettings {
+  try {
+    const raw = window.localStorage.getItem(ATTITUDE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<AttitudeSettings>;
+      return {
+        mount:
+          parsed.mount === 'inverted' || parsed.mount === 'upright' || parsed.mount === 'auto'
+            ? parsed.mount
+            : 'auto',
+        invertX: Boolean(parsed.invertX),
+        invertY: Boolean(parsed.invertY),
+        tareRoll: typeof parsed.tareRoll === 'number' ? parsed.tareRoll : 0,
+        tarePitch: typeof parsed.tarePitch === 'number' ? parsed.tarePitch : 0,
+      };
+    }
+  } catch {
+    /* ignore corrupt storage */
+  }
+  return DEFAULT_ATTITUDE_SETTINGS;
+}
+
 export function useTelemetry(limits: Limits) {
+  const initialAttitude = loadAttitudeSettings();
+  const [attitudeSettings, setAttitudeSettingsState] = useState<AttitudeSettings>(initialAttitude);
+  const attitudeSettingsRef = useRef<AttitudeSettings>(initialAttitude);
+  attitudeSettingsRef.current = attitudeSettings;
+
   const [snapshot, setSnapshot] = useState<Snapshot>({
     link: { status: 'idle', portLabel: null, message: null, source: null },
     frame: null,
@@ -159,6 +191,7 @@ export function useTelemetry(limits: Limits) {
     alerts: [],
     history: [],
     console: [],
+    attitudeSettings: initialAttitude,
   });
 
   const limitsRef = useRef(limits);
@@ -219,7 +252,9 @@ export function useTelemetry(limits: Limits) {
     if (frame) {
       const grams = frame.w;
       const filtered = accelRef.current;
-      const att = filtered.ready ? attitude(filtered.x, filtered.y, filtered.z) : null;
+      const att = filtered.ready
+        ? attitude(filtered.x, filtered.y, filtered.z, attitudeSettingsRef.current)
+        : null;
       const history = historyRef.current;
       const rate = grams === null ? null : loadRate(history.slice(-60));
       let eta: number | null = null;
@@ -256,6 +291,7 @@ export function useTelemetry(limits: Limits) {
       alerts: alertRef.current,
       history: historyRef.current,
       console: consoleRef.current,
+      attitudeSettings: attitudeSettingsRef.current,
     });
   }, []);
 
@@ -294,9 +330,16 @@ export function useTelemetry(limits: Limits) {
       }
 
       const filtered = accelRef.current;
-      const att = filtered.ready ? attitude(filtered.x, filtered.y, filtered.z) : null;
+      const att = filtered.ready
+        ? attitude(filtered.x, filtered.y, filtered.z, attitudeSettingsRef.current)
+        : null;
       if (att) {
-        stats.maxTilt = Math.max(stats.maxTilt, att.tilt);
+        // Reset old historical maxTilt if it was poisoned by the previous 180° inverted mount reading
+        if (stats.maxTilt > 90) {
+          stats.maxTilt = att.tilt;
+        } else {
+          stats.maxTilt = Math.max(stats.maxTilt, att.tilt);
+        }
         if (att.tilt > 12) {
           raise(
             'tilt',
@@ -534,6 +577,80 @@ export function useTelemetry(limits: Limits) {
     publish();
   }, [publish]);
 
+  const tareLevel = useCallback(() => {
+    const filtered = accelRef.current;
+    if (!filtered.ready) return;
+    const settings = attitudeSettingsRef.current;
+    const rawAtt = attitude(filtered.x, filtered.y, filtered.z, {
+      ...settings,
+      tareRoll: 0,
+      tarePitch: 0,
+    });
+    if (!rawAtt) return;
+
+    const newSettings: AttitudeSettings = {
+      ...settings,
+      tareRoll: rawAtt.rawRoll ?? rawAtt.roll,
+      tarePitch: rawAtt.rawPitch ?? rawAtt.pitch,
+    };
+    attitudeSettingsRef.current = newSettings;
+    setAttitudeSettingsState(newSettings);
+    try {
+      window.localStorage.setItem(ATTITUDE_KEY, JSON.stringify(newSettings));
+    } catch {
+      /* ignore */
+    }
+
+    statsRef.current.maxTilt = 0;
+    alertRef.current = alertRef.current.filter(
+      (a) => !a.title.includes('Wagon leaning') && !a.title.includes('Wagon off level'),
+    );
+    pushConsole(
+      'sys',
+      `Level calibrated: roll ${(rawAtt.rawRoll ?? 0).toFixed(1)}°, pitch ${(rawAtt.rawPitch ?? 0).toFixed(1)}° zeroed`,
+    );
+    publish();
+  }, [publish, pushConsole]);
+
+  const resetTareLevel = useCallback(() => {
+    const settings = attitudeSettingsRef.current;
+    const newSettings: AttitudeSettings = {
+      ...settings,
+      tareRoll: 0,
+      tarePitch: 0,
+    };
+    attitudeSettingsRef.current = newSettings;
+    setAttitudeSettingsState(newSettings);
+    try {
+      window.localStorage.setItem(ATTITUDE_KEY, JSON.stringify(newSettings));
+    } catch {
+      /* ignore */
+    }
+    statsRef.current.maxTilt = 0;
+    pushConsole('sys', 'Level tare reset to raw sensor orientation');
+    publish();
+  }, [publish, pushConsole]);
+
+  const updateAttitudeSettings = useCallback(
+    (patch: Partial<AttitudeSettings>) => {
+      const current = attitudeSettingsRef.current;
+      const updated: AttitudeSettings = { ...current, ...patch };
+      attitudeSettingsRef.current = updated;
+      setAttitudeSettingsState(updated);
+      try {
+        window.localStorage.setItem(ATTITUDE_KEY, JSON.stringify(updated));
+      } catch {
+        /* ignore */
+      }
+      statsRef.current.maxTilt = 0;
+      alertRef.current = alertRef.current.filter(
+        (a) => !a.title.includes('Wagon leaning') && !a.title.includes('Wagon off level'),
+      );
+      publish();
+    },
+    [publish],
+  );
+
   // Keep the link age / live flag fresh even when packets stop arriving.
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -564,7 +681,17 @@ export function useTelemetry(limits: Limits) {
 
   return {
     snapshot,
-    actions: { connect, disconnect, toggleDemo, tare, calibrate, clearAlerts },
+    actions: {
+      connect,
+      disconnect,
+      toggleDemo,
+      tare,
+      calibrate,
+      clearAlerts,
+      tareLevel,
+      resetTareLevel,
+      updateAttitudeSettings,
+    },
     serialAvailable: SerialLink.supported,
   };
 }

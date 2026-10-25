@@ -7,9 +7,20 @@ interface Props {
   link: LinkState;
   onTare: () => void;
   onCalibrate: (grams: number) => void;
+  onTareLevel?: () => void;
+  onResetTareLevel?: () => void;
+  isLevelTared?: boolean;
 }
 
-export function BenchCard({ stats, link, onTare, onCalibrate }: Props) {
+export function BenchCard({
+  stats,
+  link,
+  onTare,
+  onCalibrate,
+  onTareLevel,
+  onResetTareLevel,
+  isLevelTared,
+}: Props) {
   const [calibration, setCalibration] = useState('180');
   const serial = link.status === 'live';
   const uptime = stats.startedAt ? (Date.now() - stats.startedAt) / 1000 : null;
@@ -26,7 +37,7 @@ export function BenchCard({ stats, link, onTare, onCalibrate }: Props) {
 
       <div className="bench__actions">
         <button type="button" className="btn btn--ghost btn--wide" onClick={onTare} disabled={!serial}>
-          Tare (zero)
+          Tare weight (zero)
         </button>
         <div className="bench__cal">
           <input
@@ -47,9 +58,31 @@ export function BenchCard({ stats, link, onTare, onCalibrate }: Props) {
             Calibrate
           </button>
         </div>
+        {onTareLevel && (
+          <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--wide"
+              onClick={onTareLevel}
+              title="Calibrate wagon attitude to 0° level on the track/ground"
+            >
+              Zero attitude (level)
+            </button>
+            {isLevelTared && onResetTareLevel && (
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={onResetTareLevel}
+                title="Reset attitude tare offset"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <p className="bench__note">
-        Place the known weight on the cell, then calibrate. The factor is stored on the ESP32.
+        Tare weight with wagon empty, or zero attitude with wagon flat on track.
       </p>
 
       <dl className="session">

@@ -46,6 +46,13 @@
 /** Counts per gram from your 180 g calibration — used until a new one is sent. */
 #define DEFAULT_CAL 207.672
 
+/**
+ * Underside chassis mounting:
+ * If your MPU6050 is mounted under the wagon frame with Z pointing downwards,
+ * set MPU_INVERT_Z to true (or leave false: the dashboard auto-detects this too).
+ */
+#define MPU_INVERT_Z false
+
 /** Telemetry frame interval: 200 ms = 5 Hz. */
 #define SEND_INTERVAL_MS 200
 /** DHT11 must not be polled faster than ~1 Hz. */
@@ -171,7 +178,7 @@ void readMpu() {
   int16_t z = read16();
   ax = x / 16384.0;
   ay = y / 16384.0;
-  az = z / 16384.0;
+  az = (MPU_INVERT_Z ? -1.0f : 1.0f) * (z / 16384.0f);
 }
 
 void readClimate() {

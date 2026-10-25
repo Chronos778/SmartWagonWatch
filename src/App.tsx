@@ -91,6 +91,9 @@ export function App() {
             link={snapshot.link}
             onTare={actions.tare}
             onCalibrate={actions.calibrate}
+            onTareLevel={actions.tareLevel}
+            onResetTareLevel={actions.resetTareLevel}
+            isLevelTared={snapshot.derived?.attitude?.isTared}
           />
         </div>
 
@@ -106,6 +109,10 @@ export function App() {
             frame={snapshot.frame}
             stats={snapshot.stats}
             live={live}
+            attitudeSettings={snapshot.attitudeSettings}
+            onTareLevel={actions.tareLevel}
+            onResetTareLevel={actions.resetTareLevel}
+            onUpdateSettings={actions.updateAttitudeSettings}
           />
           <AlertLog alerts={snapshot.alerts} onClear={actions.clearAlerts} />
         </div>

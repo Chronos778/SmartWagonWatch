@@ -1335,6 +1335,14 @@ code {
   white-space: nowrap;
 }
 
+.motion__actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
 .motion__foot {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
