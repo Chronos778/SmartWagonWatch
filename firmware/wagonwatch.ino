@@ -24,9 +24,9 @@
  *   MPU6050 SDA -> GPIO21, SCL -> GPIO22, VCC -> 3V3, GND -> GND
  *   DHT11   DATA -> GPIO27 (10k pull-up to 3V3), VCC -> 3V3, GND -> GND
  *
- * Mount the MPU6050 with X across the wagon, Y along the direction of
- * travel and Z up. The dashboard computes roll = atan2(ax, az) and
- * pitch = atan2(ay, az) from those axes.
+ * Mount the MPU6050 with X along the base of the wagon (beside the load cell),
+ * Y across the wagon, and Z vertical (or underside mounted). The dashboard computes
+ * pitch = atan2(ax, az) along the base, and roll = atan2(ay, az) across the wagon.
  */
 
 #include <Wire.h>

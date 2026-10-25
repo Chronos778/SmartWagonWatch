@@ -1,14 +1,14 @@
 /**
  * Maths that turns raw sensor readings into the numbers shown on screen.
  *
- * Mounting assumption (documented in the README): the MPU6050 sits with
- * X across the wagon, Y along the direction of travel and Z up.
+ * Mounting: MPU6050 sits with X along the base of the wagon (beside the load cell),
+ * Y across the wagon (lateral), and Z vertical (auto-inverted if underside mounted).
  */
 
 export interface Attitude {
-  /** Side-to-side lean, degrees (+ = sensor +X side down). */
+  /** Side-to-side lean, degrees (+ = sensor side down). Measured across wagon (Y axis). */
   roll: number;
-  /** Fore/aft tilt, degrees. */
+  /** Fore/aft tilt, degrees (+ = front down). Measured along wagon base (X axis). */
   pitch: number;
   /** Total angle away from level, degrees. */
   tilt: number;
@@ -30,10 +30,14 @@ export interface AttitudeSettings {
    * - 'upright': Standard top mount (Z up)
    */
   mount: 'auto' | 'upright' | 'inverted';
-  /** Invert roll axis (+X side down becomes -X). */
-  invertX: boolean;
-  /** Invert pitch axis (+Y side down becomes -Y). */
-  invertY: boolean;
+  /** Invert roll axis (side-to-side lean across wagon). */
+  invertRoll?: boolean;
+  /** Invert pitch axis (fore-aft tilt along base). */
+  invertPitch?: boolean;
+  /** Legacy alias for invertPitch. */
+  invertX?: boolean;
+  /** Legacy alias for invertRoll. */
+  invertY?: boolean;
   /** Roll offset in degrees when wagon is on level ground. */
   tareRoll: number;
   /** Pitch offset in degrees when wagon is on level ground. */
@@ -42,8 +46,8 @@ export interface AttitudeSettings {
 
 export const DEFAULT_ATTITUDE_SETTINGS: AttitudeSettings = {
   mount: 'auto',
-  invertX: false,
-  invertY: false,
+  invertRoll: false,
+  invertPitch: false,
   tareRoll: 0,
   tarePitch: 0,
 };
@@ -70,12 +74,16 @@ export function attitude(
   // When mounted on the wagon underside or upside-down, gravity support points in -Z direction (az ~ -1 g).
   const isInverted = mount === 'inverted' || (mount === 'auto' && az < -0.3);
 
-  let azEff = isInverted ? -az : az;
-  let axEff = settings?.invertX ? -ax : ax;
-  let ayEff = settings?.invertY ? -ay : ay;
+  const azEff = isInverted ? -az : az;
+  // X is along the wagon base (beside load cell); Y is across the wagon.
+  const invP = Boolean(settings?.invertPitch || settings?.invertX);
+  const invR = Boolean(settings?.invertRoll || settings?.invertY);
+  const axEff = invP ? -ax : ax;
+  const ayEff = invR ? -ay : ay;
 
-  const rawRoll = Math.atan2(axEff, azEff) * RAD;
-  const rawPitch = Math.atan2(ayEff, azEff) * RAD;
+  // X along wagon base measures fore/aft pitch; Y across wagon measures side-to-side roll.
+  const rawPitch = Math.atan2(axEff, azEff) * RAD;
+  const rawRoll = Math.atan2(ayEff, azEff) * RAD;
 
   const tareRoll = settings?.tareRoll ?? 0;
   const tarePitch = settings?.tarePitch ?? 0;

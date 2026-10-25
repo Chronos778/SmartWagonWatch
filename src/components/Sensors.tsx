@@ -170,6 +170,22 @@ export function MotionCard({
         >
           Mount: {attitudeSettings.mount}
         </button>
+        <button
+          type="button"
+          className={`btn btn--ghost btn--tiny ${attitudeSettings.invertRoll ? 'is-active' : ''}`}
+          onClick={() => onUpdateSettings({ invertRoll: !attitudeSettings.invertRoll })}
+          title="Invert roll direction (side-to-side lean)"
+        >
+          {attitudeSettings.invertRoll ? 'Roll: Inv' : 'Roll: Norm'}
+        </button>
+        <button
+          type="button"
+          className={`btn btn--ghost btn--tiny ${attitudeSettings.invertPitch ? 'is-active' : ''}`}
+          onClick={() => onUpdateSettings({ invertPitch: !attitudeSettings.invertPitch })}
+          title="Invert pitch direction (fore-aft tilt along base)"
+        >
+          {attitudeSettings.invertPitch ? 'Pitch: Inv' : 'Pitch: Norm'}
+        </button>
       </div>
 
       <div className="motion__foot">
@@ -189,7 +205,7 @@ export function MotionCard({
 
       {frame?.ax != null && frame?.az != null && (
         <p className="axis-note">
-          accel x {fmt(frame.ax, 2)} · y {fmt(frame.ay, 2)} · z {fmt(frame.az, 2)} g
+          accel x {fmt(frame.ax, 2)} (base) · y {fmt(frame.ay, 2)} (cross) · z {fmt(frame.az, 2)} g
           {attitude?.inverted ? ' · (z inverted)' : ''}
         </p>
       )}

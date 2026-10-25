@@ -236,22 +236,16 @@ export function WagonScene({ attitude, loadFraction, overloaded, vibration }: Pr
       previousFrame = frameNow;
 
       const att = attitudeRef.current;
-      const targetRoll = THREE.MathUtils.clamp((att?.roll ?? 0) * DEG, -24 * DEG, 24 * DEG);
-      const targetPitch = THREE.MathUtils.clamp((att?.pitch ?? 0) * DEG, -24 * DEG, 24 * DEG);
+      const targetRoll = THREE.MathUtils.clamp((att?.roll ?? 0) * DEG, -45 * DEG, 45 * DEG);
+      const targetPitch = THREE.MathUtils.clamp((att?.pitch ?? 0) * DEG, -45 * DEG, 45 * DEG);
 
-      smoothRoll += (targetRoll - smoothRoll) * Math.min(1, delta * 4.5);
-      smoothPitch += (targetPitch - smoothPitch) * Math.min(1, delta * 4.5);
+      // Smoothly track real-life wagon movements without lag or artificial wobble
+      smoothRoll += (targetRoll - smoothRoll) * Math.min(1, delta * 10);
+      smoothPitch += (targetPitch - smoothPitch) * Math.min(1, delta * 10);
 
-      // Only shake on real vibration above the stationary sensor noise floor (> 0.02 g).
-      const vibActive = Math.max(0, vibrationRef.current - 0.02);
-      const amplitude = Math.min(0.03, vibActive * 0.4);
-      const jitter = amplitude > 0 ? Math.sin(elapsed * 46) * amplitude : 0;
-      const jitter2 = amplitude > 0 ? Math.cos(elapsed * 61) * amplitude * 0.7 : 0;
-
-      tilt.rotation.z = smoothRoll + jitter;
-      tilt.rotation.x = smoothPitch + jitter2;
-
-      // Keep the wagon wheels planted solidly on the ground
+      // Directly mimic real-world wagon attitude — zero synthetic shake or wobbling
+      tilt.rotation.z = smoothRoll;
+      tilt.rotation.x = smoothPitch;
       tilt.position.y = 0;
 
       const isOver = overloadRef.current;

@@ -163,8 +163,8 @@ function loadAttitudeSettings(): AttitudeSettings {
           parsed.mount === 'inverted' || parsed.mount === 'upright' || parsed.mount === 'auto'
             ? parsed.mount
             : 'auto',
-        invertX: Boolean(parsed.invertX),
-        invertY: Boolean(parsed.invertY),
+        invertRoll: Boolean(parsed.invertRoll ?? parsed.invertY),
+        invertPitch: Boolean(parsed.invertPitch ?? parsed.invertX),
         tareRoll: typeof parsed.tareRoll === 'number' ? parsed.tareRoll : 0,
         tarePitch: typeof parsed.tarePitch === 'number' ? parsed.tarePitch : 0,
       };
@@ -322,7 +322,7 @@ export function useTelemetry(limits: Limits) {
           accel.z = frame.az;
           accel.ready = true;
         } else {
-          const alpha = 0.15;
+          const alpha = 0.35;
           accel.x += (frame.ax - accel.x) * alpha;
           accel.y += (frame.ay - accel.y) * alpha;
           accel.z += (frame.az - accel.z) * alpha;
