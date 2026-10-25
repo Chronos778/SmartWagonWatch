@@ -494,7 +494,12 @@ export function useTelemetry(limits: Limits) {
       publish();
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error);
-      const friendly = /No port selected|cancel/i.test(raw) ? 'No serial port was selected.' : raw;
+      let friendly = raw;
+      if (/No port selected|cancel/i.test(raw)) {
+        friendly = 'No serial port was selected.';
+      } else if (/Failed to open serial port/i.test(raw)) {
+        friendly = 'Port busy: close Arduino Serial Monitor or other browser tabs, or unplug/replug the USB cable.';
+      }
       pushConsole('sys', friendly);
       setLink({ status: 'error', message: friendly });
     }
